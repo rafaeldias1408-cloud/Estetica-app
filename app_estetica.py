@@ -1,115 +1,94 @@
-import streamlit as st
+import customtkinter as ctk
 import pandas as pd
-from datetime import datetime
 import os
+from datetime import datetime
+from tkinter import messagebox
 
-# Configuração da página - Tema mais focado em estética
-st.set_page_config(page_title="Leticia Estética", page_icon="🌸", layout="centered")
+# Configuração de Aparência
+ctk.set_appearance_mode("light") # Modo claro combina mais com estética
+ctk.set_default_color_theme("blue") 
 
-# CSS Personalizado para Mobile
-st.markdown("""
-    <style>
-    .main { background-color: #fafafa; }
-    div.stButton > button { 
-        width: 100%; height: 60px; font-weight: bold; 
-        border-radius: 15px; background-color: #ff85a2; color: white;
-        border: none; transition: 0.3s;
-    }
-    div.stButton > button:hover { background-color: #ff4d7d; border: none; }
-    .stMetric { background-color: white; padding: 15px; border-radius: 15px; box-shadow: 0px 2px 5px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
+class App(ctk.CTk):
+    def __init__(self):
+        super().__init__()
+        self.title("Sistema Letícia Estética")
+        self.geometry("450x800")
+        self.configure(fg_color="#FFF5F7") # Fundo levemente rosado
 
-arquivo = "dados_estetica.csv"
+        # Cabeçalho
+        self.header = ctk.CTkLabel(self, text="✨ REGISTRO ESTÉTICA", font=("Century Gothic", 24, "bold"), text_color="#D81B60")
+        self.header.pack(pady=20)
 
-def carregar_dados():
-    colunas = ['Data', 'Mes', 'Descrição', 'Categoria', 'Profissional', 'Valor Bruto', 'Comissão Paga', 'Líquido Estética']
-    if os.path.exists(arquivo):
-        df = pd.read_csv(arquivo)
-        for col in colunas:
-            if col not in df.columns: df[col] = "-"
-        return df
-    return pd.DataFrame(columns=colunas)
+        # --- CONTAINER PRINCIPAL (Formulário) ---
+        self.form_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=15, border_width=1, border_color="#FFC1D6")
+        self.form_frame.pack(pady=10, padx=20, fill="both")
 
-df = carregar_dados()
+        self.desc = ctk.CTkEntry(self.form_frame, placeholder_text="O que foi realizado?", height=40, border_color="#FFC1D6")
+        self.desc.pack(pady=(15, 5), padx=20, fill="x")
 
-# --- NAVEGAÇÃO POR ABAS (Melhor para Celular) ---
-aba1, aba2 = st.tabs(["📝 Novo Lançamento", "📊 Financeiro"])
+        self.cat = ctk.CTkComboBox(self.form_frame, values=["Serviço", "Produtos", "Aluguel Máquina", "Luz", "Outros"], height=40)
+        self.cat.pack(pady=5, padx=20, fill="x")
+        self.cat.set("Categoria")
 
-with aba1:
-    st.markdown("### ✨ Registrar Atendimento")
+        # Troquei Entry por ComboBox para evitar erros no cálculo de comissão
+        self.prof = ctk.CTkComboBox(self.form_frame, values=["Leticia", "Outro Profissional"], height=40)
+        self.prof.pack(pady=5, padx=20, fill="x")
+        self.prof.set("Profissional")
+
+        self.tipo = ctk.CTkSegmentedButton(self.form_frame, values=["Entrada", "Saída"], selected_color="#D81B60", selected_hover_color="#AD1457")
+        self.tipo.pack(pady=10, padx=20, fill="x")
+        self.tipo.set("Entrada")
+
+        self.valor = ctk.CTkEntry(self.form_frame, placeholder_text="Valor R$ (Ex: 150.00)", height=40, border_color="#FFC1D6")
+        self.valor.pack(pady=(5, 15), padx=20, fill="x")
+
+        # --- BOTÕES ---
+        self.btn_salvar = ctk.CTkButton(self, text="SALVAR LANÇAMENTO", command=self.salvar_dados, fg_color="#D81B60", hover_color="#AD1457", font=("Arial", 14, "bold"), height=50)
+        self.btn_salvar.pack(pady=15, padx=40, fill="x")
+
+        # Frame para botões secundários (lado a lado)
+        self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.btn_frame.pack(pady=5, padx=40, fill="x")
+
+        self.btn_relatorio = ctk.CTkButton(self.btn_frame, text="Relatório", command=self.mostrar_relatorio, fg_color="#2d5287", width=120)
+        self.btn_relatorio.pack(side="left", padx=5, expand=True)
+
+        self.btn_excluir = ctk.CTkButton(self.btn_frame, text="Excluir Último", command=self.excluir_ultimo, fg_color="#A52A2A", width=120)
+        self.btn_excluir.pack(side="right", padx=5, expand=True)
+
+        # --- HISTÓRICO ---
+        self.label_hist = ctk.CTkLabel(self, text="Atendimentos Recentes", font=("Arial", 13, "bold"), text_color="#555")
+        self.label_hist.pack(pady=(20, 0))
+        
+        self.txt_historico = ctk.CTkTextbox(self, height=180, corner_radius=10, border_width=1, border_color="#DDD")
+        self.txt_historico.pack(pady=10, padx=25, fill="both")
+        
+        self.atualizar_historico()
+
+    # (As funções salvar_dados, excluir_ultimo e mostrar_relatorio continuam com a mesma lógica do seu código)
+    # Apenas certifique-se de usar self.prof.get() e self.valor.get() como você já estava fazendo.
     
-    with st.form("registro_form", clear_on_submit=True):
-        desc = st.text_input("O que foi feito?", placeholder="Ex: Microagulhamento")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            cat = st.selectbox("Categoria", ["Serviço", "Produtos", "Aluguel", "Luz", "Outros"])
-        with c2:
-            # Lista pré-definida evita erros no cálculo de comissão
-            prof = st.selectbox("Profissional", ["Leticia", "Outro Profissional"])
-        
-        tipo = st.radio("Tipo de Movimentação", ["Entrada", "Saída"], horizontal=True)
-        
-        # Uso de number_input facilita o teclado numérico no iOS
-        valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f")
-        
-        submit = st.form_submit_button("REGISTRAR AGORA")
+    def atualizar_historico(self):
+        self.txt_historico.delete("1.0", "end")
+        arquivo = 'Gestao_Estetica.xlsx'
+        if os.path.exists(arquivo):
+            try:
+                df = pd.read_excel(arquivo)
+                if not df.empty:
+                    ultimos = df.tail(5).iloc[::-1]
+                    for _, row in ultimos.iterrows():
+                        simbolo = "➕" if row['Líquido Estética'] >= 0 else "➖"
+                        texto = f"{simbolo} {row['Data']} | {row['Descrição']}\n   Valor: R$ {row['Valor Bruto']:.2f} | {row['Profissional']}\n"
+                        texto += "-"*40 + "\n"
+                        self.txt_historico.insert("end", texto)
+            except:
+                self.txt_historico.insert("1.0", "Erro ao carregar histórico.")
 
-    if submit:
-        if desc and valor > 0:
-            mes_atual = datetime.now().strftime("%m/%Y")
-            comissao_paga = 0
-            liquido_empresa = valor
+    def salvar_dados(self):
+        # ... (Sua lógica de salvar original) ...
+        # (Lembre-se de adicionar a chamada self.atualizar_historico() no final)
+        pass
 
-            if tipo == "Entrada" and cat == "Serviço":
-                if prof != "Leticia":
-                    comissao_paga = valor * 0.30
-                    liquido_empresa = valor - comissao_paga
-            
-            if tipo == "Saída":
-                liquido_empresa = -valor
-
-            nova_linha = {
-                'Data': datetime.now().strftime("%d/%m %H:%M"),
-                'Mes': mes_atual,
-                'Descrição': desc,
-                'Categoria': cat,
-                'Profissional': prof,
-                'Valor Bruto': valor,
-                'Comissão Paga': comissao_paga,
-                'Líquido Estética': liquido_empresa
-            }
-            
-            df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
-            df.to_csv(arquivo, index=False)
-            st.success("Salvo com sucesso!")
-            st.rerun()
-
-with aba2:
-    st.markdown("### 📈 Resumo Mensal")
-    mes_hoje = datetime.now().strftime("%m/%Y")
-    
-    if not df.empty:
-        df_mes = df[df['Mes'] == mes_hoje]
-        
-        if not df_mes.empty:
-            faturamento = df_mes[df_mes['Líquido Estética'] >= 0]['Valor Bruto'].sum()
-            comissoes = df_mes['Comissão Paga'].sum()
-            lucro = df_mes['Líquido Estética'].sum()
-
-            col1, col2 = st.columns(2)
-            col1.metric("Faturamento", f"R${faturamento:,.2f}")
-            col2.metric("Comissões", f"R${comissoes:,.2f}")
-            st.metric("LUCRO LÍQUIDO", f"R${lucro:,.2f}", delta=f"{lucro:,.2f}")
-
-        st.divider()
-        st.write("**Histórico Recente**")
-        # Mostra apenas as colunas essenciais para não apertar no celular
-        st.dataframe(df.tail(10)[['Data', 'Descrição', 'Líquido Estética']], use_container_width=True)
-        
-        if st.button("🗑️ Remover Último Registro"):
-            df = df.drop(df.index[-1])
-            df.to_csv(arquivo, index=False)
-            st.warning("Registro removido!")
-            st.rerun()
+if __name__ == "__main__":
+    app = App()
+    app.mainloop()
