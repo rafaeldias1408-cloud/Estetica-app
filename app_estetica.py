@@ -6,7 +6,7 @@ import os
 # Configuração da página para Celular
 st.set_page_config(page_title="Estética Letícia", page_icon="✨", layout="centered")
 
-# Estilo para botões grandes e cores do seu código original
+# Estilo para botões grandes e cores
 st.markdown("""
     <style>
     div.stButton > button { width: 100%; height: 50px; font-weight: bold; border-radius: 10px; }
@@ -18,11 +18,17 @@ st.title("✨ REGISTRO ESTÉTICA")
 
 arquivo = "dados_estetica.csv"
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÃO DE DADOS CORRIGIDA ---
 def carregar_dados():
+    colunas = ['Data', 'Mes', 'Descrição', 'Categoria', 'Profissional', 'Valor Bruto', 'Comissão Paga', 'Líquido Estética']
     if os.path.exists(arquivo):
-        return pd.read_csv(arquivo)
-    return pd.DataFrame(columns=['Data', 'Mes', 'Descrição', 'Categoria', 'Profissional', 'Valor Bruto', 'Comissão Paga', 'Líquido Estética'])
+        df = pd.read_csv(arquivo)
+        # Verifica se todas as colunas necessárias existem (corrige o erro KeyError)
+        for col in colunas:
+            if col not in df.columns:
+                df[col] = "-" # Cria a coluna faltando com valor vazio
+        return df
+    return pd.DataFrame(columns=colunas)
 
 df = carregar_dados()
 
@@ -47,7 +53,8 @@ if btn_salvar:
             liquido_empresa = bruto
 
             if tipo == "Entrada" and cat == "Serviço":
-                if profissional != "Leticia":
+                # Regra: Se for diferente de Leticia, calcula 30%
+                if profissional.lower() != "leticia":
                     comissao_paga = bruto * 0.30
                     liquido_empresa = bruto - comissao_paga
             
@@ -72,27 +79,31 @@ if btn_salvar:
         except:
             st.error("❌ Erro no valor. Use apenas números e ponto.")
 
-# --- RELATÓRIO MENSAL (BOTÃO AZUL) ---
+# --- RELATÓRIO MENSAL ---
 st.divider()
-mes_atual = datetime.now().strftime("%m/%Y")
-df_mes = df[df['Mes'] == mes_atual] if not df.empty else df
+mes_hoje = datetime.now().strftime("%m/%Y")
 
-if not df_mes.empty:
-    faturamento = df_mes[df_mes['Líquido Estética'] >= 0]['Valor Bruto'].sum()
-    comissoes = df_mes['Comissão Paga'].sum()
-    gastos = df_mes[df_mes['Líquido Estética'] < 0]['Valor Bruto'].sum()
-    lucro = df_mes['Líquido Estética'].sum()
+# Filtra pelo mês de forma segura
+if not df.empty and 'Mes' in df.columns:
+    df_mes = df[df['Mes'] == mes_hoje]
+    
+    if not df_mes.empty:
+        # Tenta converter para numérico para garantir que a soma funcione
+        faturamento = pd.to_numeric(df_mes[df_mes['Líquido Estética'] >= 0]['Valor Bruto'], errors='coerce').sum()
+        comissoes = pd.to_numeric(df_mes['Comissão Paga'], errors='coerce').sum()
+        gastos = pd.to_numeric(df_mes[df_mes['Líquido Estética'] < 0]['Valor Bruto'], errors='coerce').sum()
+        lucro = pd.to_numeric(df_mes['Líquido Estética'], errors='coerce').sum()
 
-    st.subheader(f"📊 Relatório {mes_atual}")
-    c1, c2 = st.columns(2)
-    c1.metric("Fat. Bruto", f"R${faturamento:,.2f}")
-    c1.metric("Comissões", f"R${comissoes:,.2f}")
-    c2.metric("Gastos", f"R${gastos:,.2f}")
-    c2.metric("LUCRO", f"R${lucro:,.2f}")
+        st.subheader(f"📊 Relatório {mes_hoje}")
+        c1, c2 = st.columns(2)
+        c1.metric("Fat. Bruto", f"R${faturamento:,.2f}")
+        c1.metric("Comissões", f"R${comissoes:,.2f}")
+        c2.metric("Gastos", f"R${gastos:,.2f}")
+        c2.metric("LUCRO", f"R${lucro:,.2f}")
 
 # --- HISTÓRICO E EXCLUSÃO ---
 st.divider()
-st.subheader("Últimos 5 Lançamentos")
+st.subheader("Últimos Lançamentos")
 if not df.empty:
     st.table(df.tail(5)[['Data', 'Descrição', 'Valor Bruto', 'Profissional']])
     
