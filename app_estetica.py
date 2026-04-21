@@ -3,112 +3,113 @@ import pandas as pd
 from datetime import datetime
 import os
 
-# Configuração da página para Celular
-st.set_page_config(page_title="Estética Letícia", page_icon="✨", layout="centered")
+# Configuração da página - Tema mais focado em estética
+st.set_page_config(page_title="Leticia Estética", page_icon="🌸", layout="centered")
 
-# Estilo para botões grandes e cores
+# CSS Personalizado para Mobile
 st.markdown("""
     <style>
-    div.stButton > button { width: 100%; height: 50px; font-weight: bold; border-radius: 10px; }
-    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; }
+    .main { background-color: #fafafa; }
+    div.stButton > button { 
+        width: 100%; height: 60px; font-weight: bold; 
+        border-radius: 15px; background-color: #ff85a2; color: white;
+        border: none; transition: 0.3s;
+    }
+    div.stButton > button:hover { background-color: #ff4d7d; border: none; }
+    .stMetric { background-color: white; padding: 15px; border-radius: 15px; box-shadow: 0px 2px 5px rgba(0,0,0,0.05); }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("✨ REGISTRO ESTÉTICA")
-
 arquivo = "dados_estetica.csv"
 
-# --- FUNÇÃO DE DADOS CORRIGIDA ---
 def carregar_dados():
     colunas = ['Data', 'Mes', 'Descrição', 'Categoria', 'Profissional', 'Valor Bruto', 'Comissão Paga', 'Líquido Estética']
     if os.path.exists(arquivo):
         df = pd.read_csv(arquivo)
-        # Verifica se todas as colunas necessárias existem (corrige o erro KeyError)
         for col in colunas:
-            if col not in df.columns:
-                df[col] = "-" # Cria a coluna faltando com valor vazio
+            if col not in df.columns: df[col] = "-"
         return df
     return pd.DataFrame(columns=colunas)
 
 df = carregar_dados()
 
-# --- FORMULÁRIO DE LANÇAMENTO ---
-with st.form("registro_form", clear_on_submit=True):
-    desc = st.text_input("Descrição (ex: Limpeza de Pele)")
-    cat = st.selectbox("Categoria", ["Serviço", "Produtos", "Aluguel Máquina", "Aluguel (Inc. Água)", "Luz"])
-    prof = st.text_input("Profissional (quem fez o serviço)")
-    tipo = st.radio("Tipo", ["Entrada", "Saída"], horizontal=True)
-    valor_texto = st.text_input("Valor Bruto (Ex: 150.00)")
-    
-    btn_salvar = st.form_submit_button("SALVAR NO SISTEMA")
+# --- NAVEGAÇÃO POR ABAS (Melhor para Celular) ---
+aba1, aba2 = st.tabs(["📝 Novo Lançamento", "📊 Financeiro"])
 
-if btn_salvar:
-    if desc and valor_texto:
-        try:
-            bruto = float(valor_texto.replace(",", "."))
-            profissional = prof.strip().capitalize()
+with aba1:
+    st.markdown("### ✨ Registrar Atendimento")
+    
+    with st.form("registro_form", clear_on_submit=True):
+        desc = st.text_input("O que foi feito?", placeholder="Ex: Microagulhamento")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            cat = st.selectbox("Categoria", ["Serviço", "Produtos", "Aluguel", "Luz", "Outros"])
+        with c2:
+            # Lista pré-definida evita erros no cálculo de comissão
+            prof = st.selectbox("Profissional", ["Leticia", "Outro Profissional"])
+        
+        tipo = st.radio("Tipo de Movimentação", ["Entrada", "Saída"], horizontal=True)
+        
+        # Uso de number_input facilita o teclado numérico no iOS
+        valor = st.number_input("Valor (R$)", min_value=0.0, step=10.0, format="%.2f")
+        
+        submit = st.form_submit_button("REGISTRAR AGORA")
+
+    if submit:
+        if desc and valor > 0:
             mes_atual = datetime.now().strftime("%m/%Y")
-            
             comissao_paga = 0
-            liquido_empresa = bruto
+            liquido_empresa = valor
 
             if tipo == "Entrada" and cat == "Serviço":
-                # Regra: Se for diferente de Leticia, calcula 30%
-                if profissional.lower() != "leticia":
-                    comissao_paga = bruto * 0.30
-                    liquido_empresa = bruto - comissao_paga
+                if prof != "Leticia":
+                    comissao_paga = valor * 0.30
+                    liquido_empresa = valor - comissao_paga
             
             if tipo == "Saída":
-                liquido_empresa = -bruto
+                liquido_empresa = -valor
 
             nova_linha = {
                 'Data': datetime.now().strftime("%d/%m %H:%M"),
                 'Mes': mes_atual,
                 'Descrição': desc,
                 'Categoria': cat,
-                'Profissional': profissional if profissional else "-",
-                'Valor Bruto': bruto,
+                'Profissional': prof,
+                'Valor Bruto': valor,
                 'Comissão Paga': comissao_paga,
                 'Líquido Estética': liquido_empresa
             }
             
             df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
             df.to_csv(arquivo, index=False)
-            st.success("✅ Dados salvos!")
+            st.success("Salvo com sucesso!")
             st.rerun()
-        except:
-            st.error("❌ Erro no valor. Use apenas números e ponto.")
 
-# --- RELATÓRIO MENSAL ---
-st.divider()
-mes_hoje = datetime.now().strftime("%m/%Y")
-
-# Filtra pelo mês de forma segura
-if not df.empty and 'Mes' in df.columns:
-    df_mes = df[df['Mes'] == mes_hoje]
+with aba2:
+    st.markdown("### 📈 Resumo Mensal")
+    mes_hoje = datetime.now().strftime("%m/%Y")
     
-    if not df_mes.empty:
-        # Tenta converter para numérico para garantir que a soma funcione
-        faturamento = pd.to_numeric(df_mes[df_mes['Líquido Estética'] >= 0]['Valor Bruto'], errors='coerce').sum()
-        comissoes = pd.to_numeric(df_mes['Comissão Paga'], errors='coerce').sum()
-        gastos = pd.to_numeric(df_mes[df_mes['Líquido Estética'] < 0]['Valor Bruto'], errors='coerce').sum()
-        lucro = pd.to_numeric(df_mes['Líquido Estética'], errors='coerce').sum()
+    if not df.empty:
+        df_mes = df[df['Mes'] == mes_hoje]
+        
+        if not df_mes.empty:
+            faturamento = df_mes[df_mes['Líquido Estética'] >= 0]['Valor Bruto'].sum()
+            comissoes = df_mes['Comissão Paga'].sum()
+            lucro = df_mes['Líquido Estética'].sum()
 
-        st.subheader(f"📊 Relatório {mes_hoje}")
-        c1, c2 = st.columns(2)
-        c1.metric("Fat. Bruto", f"R${faturamento:,.2f}")
-        c1.metric("Comissões", f"R${comissoes:,.2f}")
-        c2.metric("Gastos", f"R${gastos:,.2f}")
-        c2.metric("LUCRO", f"R${lucro:,.2f}")
+            col1, col2 = st.columns(2)
+            col1.metric("Faturamento", f"R${faturamento:,.2f}")
+            col2.metric("Comissões", f"R${comissoes:,.2f}")
+            st.metric("LUCRO LÍQUIDO", f"R${lucro:,.2f}", delta=f"{lucro:,.2f}")
 
-# --- HISTÓRICO E EXCLUSÃO ---
-st.divider()
-st.subheader("Últimos Lançamentos")
-if not df.empty:
-    st.table(df.tail(5)[['Data', 'Descrição', 'Valor Bruto', 'Profissional']])
-    
-    if st.button("🗑️ EXCLUIR ÚLTIMO LANÇAMENTO"):
-        df = df.drop(df.index[-1])
-        df.to_csv(arquivo, index=False)
-        st.warning("Removido!")
-        st.rerun()
+        st.divider()
+        st.write("**Histórico Recente**")
+        # Mostra apenas as colunas essenciais para não apertar no celular
+        st.dataframe(df.tail(10)[['Data', 'Descrição', 'Líquido Estética']], use_container_width=True)
+        
+        if st.button("🗑️ Remover Último Registro"):
+            df = df.drop(df.index[-1])
+            df.to_csv(arquivo, index=False)
+            st.warning("Registro removido!")
+            st.rerun()
