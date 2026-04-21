@@ -1,94 +1,142 @@
-import customtkinter as ctk
+import flet as ft
 import pandas as pd
-import os
 from datetime import datetime
-from tkinter import messagebox
+import os
 
-# Configuração de Aparência
-ctk.set_appearance_mode("light") # Modo claro combina mais com estética
-ctk.set_default_color_theme("blue") 
+def main(page: ft.Page):
+    page.title = "Leticia Estética"
+    page.theme_mode = ft.ThemeMode.LIGHT
+    page.window_width = 400
+    page.window_height = 800
+    page.padding = 20
+    # Cores do tema estética
+    cor_principal = "#D81B60" 
 
-class App(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-        self.title("Sistema Letícia Estética")
-        self.geometry("450x800")
-        self.configure(fg_color="#FFF5F7") # Fundo levemente rosado
+    arquivo = 'Gestao_Estetica.xlsx'
 
-        # Cabeçalho
-        self.header = ctk.CTkLabel(self, text="✨ REGISTRO ESTÉTICA", font=("Century Gothic", 24, "bold"), text_color="#D81B60")
-        self.header.pack(pady=20)
+    # --- FUNÇÕES DE LÓGICA ---
+    def salvar_dados(e):
+        if not txt_desc.value or not txt_valor.value:
+            page.snack_bar = ft.SnackBar(ft.Text("Preencha a descrição e o valor!"))
+            page.snack_bar.open = True
+            page.update()
+            return
 
-        # --- CONTAINER PRINCIPAL (Formulário) ---
-        self.form_frame = ctk.CTkFrame(self, fg_color="white", corner_radius=15, border_width=1, border_color="#FFC1D6")
-        self.form_frame.pack(pady=10, padx=20, fill="both")
+        try:
+            bruto = float(txt_valor.value.replace(",", "."))
+            profissional = combo_prof.value
+            tipo = seg_tipo.value
+            categoria = combo_cat.value
+            
+            comissao_paga = 0
+            liquido_empresa = bruto
 
-        self.desc = ctk.CTkEntry(self.form_frame, placeholder_text="O que foi realizado?", height=40, border_color="#FFC1D6")
-        self.desc.pack(pady=(15, 5), padx=20, fill="x")
+            if tipo == "Entrada" and categoria == "Serviço":
+                if profissional != "Leticia":
+                    comissao_paga = bruto * 0.30
+                    liquido_empresa = bruto - comissao_paga
+            
+            if tipo == "Saída":
+                liquido_empresa = -bruto
 
-        self.cat = ctk.CTkComboBox(self.form_frame, values=["Serviço", "Produtos", "Aluguel Máquina", "Luz", "Outros"], height=40)
-        self.cat.pack(pady=5, padx=20, fill="x")
-        self.cat.set("Categoria")
-
-        # Troquei Entry por ComboBox para evitar erros no cálculo de comissão
-        self.prof = ctk.CTkComboBox(self.form_frame, values=["Leticia", "Outro Profissional"], height=40)
-        self.prof.pack(pady=5, padx=20, fill="x")
-        self.prof.set("Profissional")
-
-        self.tipo = ctk.CTkSegmentedButton(self.form_frame, values=["Entrada", "Saída"], selected_color="#D81B60", selected_hover_color="#AD1457")
-        self.tipo.pack(pady=10, padx=20, fill="x")
-        self.tipo.set("Entrada")
-
-        self.valor = ctk.CTkEntry(self.form_frame, placeholder_text="Valor R$ (Ex: 150.00)", height=40, border_color="#FFC1D6")
-        self.valor.pack(pady=(5, 15), padx=20, fill="x")
-
-        # --- BOTÕES ---
-        self.btn_salvar = ctk.CTkButton(self, text="SALVAR LANÇAMENTO", command=self.salvar_dados, fg_color="#D81B60", hover_color="#AD1457", font=("Arial", 14, "bold"), height=50)
-        self.btn_salvar.pack(pady=15, padx=40, fill="x")
-
-        # Frame para botões secundários (lado a lado)
-        self.btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.btn_frame.pack(pady=5, padx=40, fill="x")
-
-        self.btn_relatorio = ctk.CTkButton(self.btn_frame, text="Relatório", command=self.mostrar_relatorio, fg_color="#2d5287", width=120)
-        self.btn_relatorio.pack(side="left", padx=5, expand=True)
-
-        self.btn_excluir = ctk.CTkButton(self.btn_frame, text="Excluir Último", command=self.excluir_ultimo, fg_color="#A52A2A", width=120)
-        self.btn_excluir.pack(side="right", padx=5, expand=True)
-
-        # --- HISTÓRICO ---
-        self.label_hist = ctk.CTkLabel(self, text="Atendimentos Recentes", font=("Arial", 13, "bold"), text_color="#555")
-        self.label_hist.pack(pady=(20, 0))
-        
-        self.txt_historico = ctk.CTkTextbox(self, height=180, corner_radius=10, border_width=1, border_color="#DDD")
-        self.txt_historico.pack(pady=10, padx=25, fill="both")
-        
-        self.atualizar_historico()
-
-    # (As funções salvar_dados, excluir_ultimo e mostrar_relatorio continuam com a mesma lógica do seu código)
-    # Apenas certifique-se de usar self.prof.get() e self.valor.get() como você já estava fazendo.
-    
-    def atualizar_historico(self):
-        self.txt_historico.delete("1.0", "end")
-        arquivo = 'Gestao_Estetica.xlsx'
-        if os.path.exists(arquivo):
-            try:
+            nova_linha = {
+                'Data': datetime.now().strftime("%d/%m %H:%M"),
+                'Mes': datetime.now().strftime("%m/%Y"),
+                'Descrição': txt_desc.value,
+                'Categoria': categoria,
+                'Profissional': profissional,
+                'Valor Bruto': bruto,
+                'Comissão Paga': comissao_paga,
+                'Líquido Estética': liquido_empresa
+            }
+            
+            if os.path.exists(arquivo):
                 df = pd.read_excel(arquivo)
-                if not df.empty:
-                    ultimos = df.tail(5).iloc[::-1]
-                    for _, row in ultimos.iterrows():
-                        simbolo = "➕" if row['Líquido Estética'] >= 0 else "➖"
-                        texto = f"{simbolo} {row['Data']} | {row['Descrição']}\n   Valor: R$ {row['Valor Bruto']:.2f} | {row['Profissional']}\n"
-                        texto += "-"*40 + "\n"
-                        self.txt_historico.insert("end", texto)
-            except:
-                self.txt_historico.insert("1.0", "Erro ao carregar histórico.")
+                df = pd.concat([df, pd.DataFrame([nova_linha])], ignore_index=True)
+            else:
+                df = pd.DataFrame([nova_linha])
+            
+            df.to_excel(arquivo, index=False)
+            
+            # Limpar campos e atualizar
+            txt_desc.value = ""
+            txt_valor.value = ""
+            atualizar_historico()
+            page.snack_bar = ft.SnackBar(ft.Text("✅ Salvo com sucesso!"))
+            page.snack_bar.open = True
+            page.update()
+            
+        except Exception as ex:
+            page.snack_bar = ft.SnackBar(ft.Text(f"Erro: {ex}"))
+            page.snack_bar.open = True
+            page.update()
 
-    def salvar_dados(self):
-        # ... (Sua lógica de salvar original) ...
-        # (Lembre-se de adicionar a chamada self.atualizar_historico() no final)
-        pass
+    def atualizar_historico():
+        lista_historico.controls.clear()
+        if os.path.exists(arquivo):
+            df = pd.read_excel(arquivo)
+            if not df.empty:
+                for _, row in df.tail(5).iloc[::-1].iterrows():
+                    cor = ft.colors.GREEN_600 if row['Líquido Estética'] >= 0 else ft.colors.RED_600
+                    lista_historico.controls.append(
+                        ft.ListTile(
+                            leading=ft.Icon(ft.icons.PAYMENT, color=cor),
+                            title=ft.Text(f"{row['Descrição']}"),
+                            subtitle=ft.Text(f"{row['Data']} - {row['Profissional']}"),
+                            trailing=ft.Text(f"R$ {row['Valor Bruto']:.2f}", weight="bold")
+                        )
+                    )
+        page.update()
 
-if __name__ == "__main__":
-    app = App()
-    app.mainloop()
+    # --- COMPONENTES DA INTERFACE ---
+    txt_desc = ft.TextField(label="O que foi feito?", border_color=cor_principal)
+    combo_cat = ft.Dropdown(
+        label="Categoria",
+        options=[
+            ft.dropdown.Option("Serviço"),
+            ft.dropdown.Option("Produtos"),
+            ft.dropdown.Option("Aluguel Máquina"),
+            ft.dropdown.Option("Luz"),
+        ],
+        value="Serviço"
+    )
+    combo_prof = ft.Dropdown(
+        label="Profissional",
+        options=[ft.dropdown.Option("Leticia"), ft.dropdown.Option("Outro")],
+        value="Leticia"
+    )
+    seg_tipo = ft.SegmentedButton(
+        selected={"Entrada"},
+        segments=[
+            ft.Segment(value="Entrada", label=ft.Text("Entrada"), icon=ft.Icon(ft.icons.ARROW_UPWARD)),
+            ft.Segment(value="Saída", label=ft.Text("Saída"), icon=ft.Icon(ft.icons.ARROW_DOWNWARD)),
+        ],
+    )
+    # No iOS, keyboard_type faz o teclado numérico abrir
+    txt_valor = ft.TextField(label="Valor R$", keyboard_type=ft.KeyboardType.NUMBER, border_color=cor_principal)
+    
+    lista_historico = ft.Column(scroll=ft.ScrollMode.ALWAYS, height=200)
+
+    # Montagem da Tela
+    page.add(
+        ft.Row([ft.Text("✨ Estética Letícia", size=28, weight="bold", color=cor_principal)], alignment=ft.MainAxisAlignment.CENTER),
+        ft.Divider(),
+        txt_desc,
+        ft.Row([combo_cat, combo_prof]),
+        ft.Row([seg_tipo], alignment=ft.MainAxisAlignment.CENTER),
+        txt_valor,
+        ft.ElevatedButton(
+            "SALVAR LANÇAMENTO", 
+            color=ft.colors.WHITE, 
+            bgcolor=cor_principal, 
+            height=50, 
+            width=400,
+            on_click=salvar_dados
+        ),
+        ft.Text("Últimos Lançamentos", size=16, weight="bold"),
+        lista_historico
+    )
+
+    atualizar_historico()
+
+ft.app(target=main)
